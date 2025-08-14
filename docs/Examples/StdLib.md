@@ -1,0 +1,52 @@
+```go
+package main
+
+import (
+	"database/sql"
+	"github.com/cameronmore/go-sessions/auth"
+	"fmt"
+	_ "github.com/mattn/go-sqlite3"
+	"log"
+	"net/http"
+)
+
+func main() {
+	db, err := sql.Open("sqlite3", "db.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("Error connecting to the db: %v", err)
+	}
+
+	fmt.Println("Sucessfully connected to db")
+
+	// Generate a new authentication context manager with you .env file and db connection
+	authCtx, err := auth.NewAuthContext(".env", db)
+	if err != nil {
+		panic(err)
+	}
+
+	http.HandleFunc("/register", authCtx.RegisterHandler)
+	http.HandleFunc("/logout", authCtx.LogoutHandler)
+	http.HandleFunc("/login", authCtx.LoginHandler)
+
+	protectedHandler := authCtx.Authmiddleware(http.HandlerFunc(protectedHello))
+	http.Handle("/hello", protectedHandler)
+
+	err = http.ListenAndServe(":3333", nil)
+	if err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
+
+}
+
+func protectedHello(w http.ResponseWriter, r *http.Request) {
+	userId := r.Context().Value("userId").(string)
+	w.Write(fmt.Appendf(nil, "Hello user %s!", userId))
+}
+
+```
