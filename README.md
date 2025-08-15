@@ -1,19 +1,24 @@
 # Go Session Auth
 
+> 🚧 This repository is still under construction and is pre-v1.0.0
+
 A session-based authentication library for Go.
 
 ## Background
 
 This library is a relatively simple implementation of session based authentication.
 
-## Usage
+## Quickstart
 
-### Quickstart
+To use this library, create a new authentication context struct by passing your secret key (for signing the session id) and a `*sql.DB` connection:
 
-To use this library, create a new authentication context struct by passing it the path to a secret `.env` file and a `sql.DB` connection:
-
+(after importing it)
 ```go
-authCtx, err := auth.NewAuthContext(".env", db)
+import "github.com/cameronmore/go-sessions/auth"
+```
+Then:
+```go
+authCtx, err := auth.NewAuthContext(YOUR_SECRET, db)
 ```
 
 Then, use those to handle the authentication endpoints:
@@ -35,10 +40,20 @@ func protectedHello(w http.ResponseWriter, r *http.Request) {
 protectedHandler := authCtx.Authmiddleware(http.HandleFunc(protectedHello))
 ```
 
-### Documentation
+## Documentation
 
-See the `docs/` directory in this repository for the full documentation. The `docs/Examples/` directory contains several examples using Gin, Chi, and the standard library. The most commented and guided one is the Chi router example.
+See the `docs/` directory in this repository for the full documentation. The `docs/Examples/` directory contains several examples using Gin, Chi, Gorilla/Mux, Echo, and the standard library. The most commented and guided one is the Chi router example.
 
-### License
+> 🚧 Note that the Gin and Echo examples imports a separate middleware library that extends this one.
+
+## Todo
+
+There are a few key things that I need to implement before a v1.0.0 release, specifically:
+- Allowing username configuration and validation to return errors when a username does not match conventions (like having only alphanumeric characters)
+- Looking up usernames to ensure uniqueness and return that error to the client
+- Password validation to make sure users have strong passwords
+- Adjust how I'm comparing stored passwords and incoming passwords (to prevent timing attacks for example)
+
+## License
 
 This project is licensed under the Apache-2.0 license.

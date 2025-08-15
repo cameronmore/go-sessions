@@ -2,13 +2,14 @@
 package main
 
 import (
-	//"fmt"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/cameronmore/go-sessions/auth"
+	"github.com/cameronmore/go-sessions/env"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/mattn/go-sqlite3"
@@ -29,8 +30,18 @@ func main() {
 
 	fmt.Println("Sucessfully connected to db")
 
-	// Generate a new authentication context manager with you .env file and db connection
-	authCtx, err := auth.NewAuthContext(".env", db)
+	// declare secret
+	secretMap, err := env.ProcessEnv(".env")
+	if err != nil {
+		panic(err)
+	}
+	secret, ok := secretMap["AUTH_SESSION_KEY"]
+	if !ok {
+		panic(errors.New("Auth key not found"))
+	}
+
+	// Generate a new authentication context manager with your secret and db connection
+	authCtx, err := auth.NewAuthContext(secret, db)
 	if err != nil {
 		panic(err)
 	}
@@ -44,7 +55,7 @@ func main() {
 		w.Write([]byte("Hello World!"))
 	})
 
-	// Here, we define the endpoints that are used for authentication: 
+	// Here, we define the endpoints that are used for authentication:
 	// - register
 	// - login
 	// - logout
@@ -73,5 +84,4 @@ func main() {
 	http.ListenAndServe(":3000", r)
 
 }
-
 ```

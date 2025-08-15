@@ -3,7 +3,9 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"github.com/cameronmore/go-sessions/auth"
+	"github.com/cameronmore/go-sessions/env"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
@@ -24,8 +26,18 @@ func main() {
 
 	fmt.Println("Sucessfully connected to db")
 
-	// Generate a new authentication context manager with you .env file and db connection
-	authCtx, err := auth.NewAuthContext(".env", db)
+	// declare secret
+	secretMap, err := env.ProcessEnv(".env")
+	if err != nil {
+		panic(err)
+	}
+	secret, ok := secretMap["AUTH_SESSION_KEY"]
+	if !ok {
+		panic(errors.New("Auth key not found"))
+	}
+
+	// Generate a new authentication context manager with your secret and db connection
+	authCtx, err := auth.NewAuthContext(secret, db)
 	if err != nil {
 		panic(err)
 	}
@@ -48,5 +60,4 @@ func protectedHello(w http.ResponseWriter, r *http.Request) {
 	userId := r.Context().Value("userId").(string)
 	w.Write(fmt.Appendf(nil, "Hello user %s!", userId))
 }
-
 ```

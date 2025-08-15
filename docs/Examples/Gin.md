@@ -3,14 +3,16 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"github.com/cameronmore/go-session-adapters/gin_mw"
+	"github.com/cameronmore/go-sessions/auth"
+	"github.com/cameronmore/go-sessions/env"
+	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/cameronmore/go-sessions/auth"
-	"github.com/gin-gonic/gin"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -26,7 +28,17 @@ func main() {
 	}
 	fmt.Println("Successfully connected to db")
 
-	authCtx, err := auth.NewAuthContext(".env", db)
+	// declare secret
+	secretMap, err := env.ProcessEnv(".env")
+	if err != nil {
+		panic(err)
+	}
+	secret, ok := secretMap["AUTH_SESSION_KEY"]
+	if !ok {
+		panic(errors.New("Auth key not found"))
+	}
+
+	authCtx, err := auth.NewAuthContext(secret, db)
 	if err != nil {
 		log.Fatalf("Error creating AuthContext: %v", err)
 	}
@@ -39,10 +51,13 @@ func main() {
 	router.POST("/register", gin.WrapF(authCtx.RegisterHandler))
 	router.POST("/login", gin.WrapF(authCtx.LoginHandler))
 	router.GET("/logout", gin.WrapF(authCtx.LogoutHandler))
-
+	// here, we need to wrap the auth context in the Gin adapter
+	var ginAuthCtx ginmw.GinAuthContext
+	ginAuthCtx.Ac = authCtx
+	// and now we can use it in this route group like so:
 	protected := router.Group("/api")
 	{
-		protected.Use(authCtx.AuthmiddlewareGin)
+		protected.Use(ginAuthCtx.AuthmiddlewareGin)
 		protected.GET("/hello", protectedHelloGin)
 	}
 
@@ -67,5 +82,4 @@ func protectedHelloGin(c *gin.Context) {
 	}
 	c.String(http.StatusOK, "Hello user %s!", userId)
 }
-
 ```

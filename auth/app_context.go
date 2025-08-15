@@ -4,13 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/cameronmore/go-sessions/env"
 	"github.com/cameronmore/go-sessions/sessions"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,16 +20,7 @@ type AuthContext struct {
 }
 
 // Returns a new Authcontext authentication manager given a secret string used for cookie signing and a db connection.
-func NewAuthContext(envString string, db *sql.DB) (*AuthContext, error) {
-	// declare secret
-	secretMap, err := env.ProcessEnv(".env")
-	if err != nil {
-		return nil, err
-	}
-	secret, ok := secretMap["AUTH_SESSION_KEY"]
-	if !ok {
-		return nil, fmt.Errorf("AUTH_SESSION_KEY not found in .env file")
-	}
+func NewAuthContext(secret string, db *sql.DB) (*AuthContext, error) {
 
 	// set up session table
 	newSessionTableQuery := `
@@ -41,7 +30,7 @@ func NewAuthContext(envString string, db *sql.DB) (*AuthContext, error) {
 	expires_at TIMESTAMP NOT NULL
 	);
 	`
-	_, err = db.Exec(newSessionTableQuery)
+	_, err := db.Exec(newSessionTableQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +54,10 @@ func NewAuthContext(envString string, db *sql.DB) (*AuthContext, error) {
 }
 
 // Handles the registration of new users and returns errors to the client if a username is already taken or the username does not meet some basic criteria.
+//
+// The expected request to this endpoint is a JSON object with the form:
+//
+// { "username" : "VALUE", "password" : "PASSWORD" }
 func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var formData map[string]interface{}
 	bodyData, err := io.ReadAll(r.Body)
@@ -127,6 +120,10 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles the login for users, returning an error if the user does not exist or the password is incorrect.
+//
+// The expected request to this endpoint is a JSON object with the form:
+//
+// { "username" : "VALUE", "password" : "PASSWORD" }
 func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var formData map[string]interface{}
 	bodyData, err := io.ReadAll(r.Body)
@@ -177,7 +174,8 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Logged in"))
 }
 
-// Logs out a user by deleting the session id from the database and setting a new expired cookie in the response.
+// Logs out a user by deleting the session id from the database and setting a new expired cookie in the response. There is
+// no expected request body for this endpoint.
 func (ac *AuthContext) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := r.Cookie("session_id")
 	if err != nil {
