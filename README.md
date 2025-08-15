@@ -53,6 +53,7 @@ There are a few key things that I need to implement before a v1.0.0 release, spe
 - Looking up usernames to ensure uniqueness and return that error to the client
 - Password validation to make sure users have strong passwords
 - Adjust how I'm comparing stored passwords and incoming passwords (to prevent timing attacks for example)
+- Allow users to modify the default session length
 
 ## License
 
