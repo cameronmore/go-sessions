@@ -49,6 +49,7 @@ See the `docs/` directory in this repository for the full documentation. The `do
 ## Todo
 
 There are a few key things that I need to implement before a v1.0.0 release, specifically:
+- Abstract the session and user store operations to allow for more implementions (with other SQL libraries instead of SQLite as the default)
 - Allowing username configuration and validation to return errors when a username does not match conventions (like having only alphanumeric characters)
 - Looking up usernames to ensure uniqueness and return that error to the client
 - Password validation to make sure users have strong passwords
