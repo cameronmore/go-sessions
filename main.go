@@ -12,12 +12,30 @@ import (
 	"github.com/cameronmore/go-sessions/env"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	// import this to use the sqlite version:
+	// _ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
+
+	// declare secret
+	secretMap, err := env.ProcessEnv(".env")
+	if err != nil {
+		panic(err)
+	}
+	secret, ok := secretMap["AUTH_SESSION_KEY"]
+	if !ok {
+		panic(errors.New("Auth key not found"))
+	}
+	dbURL, ok := secretMap["POSTGRES_URL"] // or "SQLITE_PATH" for a local SQLite file
+	if !ok {
+		panic(errors.New("Postgress URL not found"))
+	}
+
 	// set up a connection to the database
-	db, err := sql.Open("sqlite3", "db.db")
+	sqlDBType := "pgx" // could also be "sqlite3"
+	db, err := sql.Open(sqlDBType, dbURL)
 	if err != nil {
 		panic(err)
 	}
@@ -30,23 +48,16 @@ func main() {
 
 	fmt.Println("Sucessfully connected to db")
 
-	// declare secret
-	secretMap, err := env.ProcessEnv(".env")
-	if err != nil {
-		panic(err)
-	}
-	secret, ok := secretMap["AUTH_SESSION_KEY"]
-	if !ok {
-		panic(errors.New("Auth key not found"))
-	}
-
 	// Define a new SQLite store that implements the interface
-	sqliteAuthStore, err := auth.NewSQLiteStore(db)
+	postgresAuthStore, err := auth.NewPostgresAuthStore(db)
+	//or sqliteAuthStore, err := auth.NewSQLiteStore(db)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("Auth store is set up with db type: %s\n", sqlDBType)
 	// pass that store to the Authcontext that expects the interface
-	authCtx := auth.NewAuthContext(sqliteAuthStore, secret, 7*24*time.Hour)
+	authCtx := auth.NewAuthContext(postgresAuthStore, secret, 7*24*time.Hour)
+	// or authCtx := auth.NewAuthContext(sqliteAuthStore, secret, 7*24*time.Hour)
 
 	// Now define your router. In this example, I'm using Chi
 	r := chi.NewRouter()
