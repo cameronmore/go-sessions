@@ -53,9 +53,20 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Here we would look up in the db to make sure this username is unique and, if so,
-	// hash the password and store it
-	//username, password := formData["username"], formData["password"]
+	// look up the username, handle internal db server errors, and return an error
+	// if the username is already taken
+	_, err = ac.Ac.LoadUserByUsername(formData["username"].(string), r.Context())
+	if errors.Is(err, sessions.ErrUserNotFound) {
+		// proceed
+	} else if err != nil && !errors.Is(err, sessions.ErrUserNotFound) {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Printf("Error looking up users to ensure unique username: %s", err)
+		return
+	} else if err == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Username already taken"))
+		return
+	}
 
 	// add user to DB
 	var newUser sessions.User

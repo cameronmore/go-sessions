@@ -10,7 +10,7 @@ This library is a relatively simple implementation of session based authenticati
 
 ## Quickstart
 
-To use this library, create a new authentication context struct by passing your secret key (for signing the session id) and a `*sql.DB` connection:
+To use this library, create a new authentication context struct by passing your secret key (for signing the session id) and something that implements the sessions.AuthStore interface (so far, there are SQLite and Postgres implementations):
 
 (after importing it)
 ```go
@@ -47,7 +47,11 @@ func protectedHello(w http.ResponseWriter, r *http.Request) {
 protectedHandler := authCtx.Authmiddleware(http.HandleFunc(protectedHello))
 ```
 
+Please see `main.go` for an up-to-date and working example with Chi.
+
 ## Documentation
+
+> 🚧 The `main.go` file in this repository should always contain a working example, even if the other documentation lags behind.
 
 See the `docs/` directory in this repository for the full documentation. The `docs/Examples/` directory contains several examples using Gin, Chi, Gorilla/Mux, Echo, and the standard library. The most commented and guided one is the Chi router example.
 
