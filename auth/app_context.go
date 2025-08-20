@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cameronmore/go-sessions/sessions"
+	"github.com/oklog/ulid/v2"
+	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/cameronmore/go-sessions/sessions"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // An authentication manager that handles creating, accessing, and deleting sessions.
@@ -59,9 +59,7 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// add user to DB
 	var newUser sessions.User
-	// TODO make this use a ULID or UUIDv4 for new user ids and then
-	// change other methods to allow lookups by username
-	newUser.UserId = formData["username"].(string)
+	newUser.UserId = ulid.Make().String()
 	newUser.Username = formData["username"].(string)
 	newUser.HashedPassword = hashedPassword
 	err = ac.Ac.SaveUser(newUser)
@@ -115,7 +113,7 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	username, password := formData["username"].(string), formData["password"].(string)
 
-	u, err := ac.Ac.LoadUserByUserId(username, r.Context())
+	u, err := ac.Ac.LoadUserByUsername(username, r.Context())
 	if errors.Is(err, sessions.ErrUserNotFound) {
 		log.Printf("Error logging in user %s: %s", username, err)
 		w.WriteHeader(http.StatusUnauthorized)

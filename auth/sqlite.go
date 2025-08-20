@@ -33,6 +33,7 @@ func NewSQLiteStore(db *sql.DB) (*SQLiteAuthStore, error) {
 	newUserTableQuery := `
 	CREATE TABLE IF NOT EXISTS users (
 	user_id TEXT PRIMARY KEY,
+	username TEXT NOT NULL,
 	hashed_password TEXT NOT NULL
 	);
 	`
@@ -52,10 +53,10 @@ func (s *SQLiteAuthStore) SaveUser(u sessions.User) error {
 		return errors.New("User already exists, cannot save user")
 	}
 	newUserQuery := `
-		INSERT INTO users (user_id, hashed_password)
-		VALUES (?, ?)
+		INSERT INTO users (user_id, hashed_password, username)
+		VALUES (?, ?, ?)
 		`
-	_, err = s.DB.Exec(newUserQuery, u.UserId, u.HashedPassword)
+	_, err = s.DB.Exec(newUserQuery, u.UserId, u.HashedPassword, u.Username)
 	if err != nil {
 		return err
 	}
@@ -65,14 +66,24 @@ func (s *SQLiteAuthStore) SaveUser(u sessions.User) error {
 func (s *SQLiteAuthStore) LoadUserByUserId(id string, ctx context.Context) (sessions.User, error) {
 	var u sessions.User
 	u.UserId = id
-	var storedHashedPassword string
-	err := s.DB.QueryRowContext(ctx, "SELECT hashed_password FROM users WHERE user_id = ?", id).Scan(&storedHashedPassword)
+	err := s.DB.QueryRowContext(ctx, "SELECT hashed_password, username FROM users WHERE user_id = ?", id).Scan(&u.HashedPassword, &u.Username)
 	if errors.Is(sql.ErrNoRows, err) {
 		return u, sessions.ErrUserNotFound
 	} else if err != nil {
 		return u, err
 	}
-	u.HashedPassword = storedHashedPassword
+	return u, nil
+}
+
+func (s *SQLiteAuthStore) LoadUserByUsername(username string, ctx context.Context) (sessions.User, error) {
+	var u sessions.User
+	u.Username = username
+	err := s.DB.QueryRowContext(ctx, "SELECT hashed_password, user_id FROM users WHERE username = ?", username).Scan(&u.HashedPassword, &u.UserId)
+	if errors.Is(sql.ErrNoRows, err) {
+		return u, sessions.ErrUserNotFound
+	} else if err != nil {
+		return u, err
+	}
 	return u, nil
 }
 

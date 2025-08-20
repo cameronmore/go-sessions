@@ -26,6 +26,7 @@ type Session struct {
 type AuthStore interface {
 	SaveUser(User) error
 	LoadUserByUserId(string, context.Context) (User, error)
+	LoadUserByUsername(string, context.Context) (User, error)
 	// DeleteUserByUserId(string) error
 	// UpdateUser(User) error
 

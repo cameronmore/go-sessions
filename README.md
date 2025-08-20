@@ -62,7 +62,7 @@ There are a few key things that I need to implement before a v1.0.0 release, spe
 - [ ] Password validation to make sure users have strong passwords
 - [ ] Adjust how I'm comparing stored passwords and incoming passwords (to prevent timing attacks for example)
 - [x] Allow users to modify the default session length
-- [ ] Change the way i'm generating user ids and how I'm looking up users by username v. user id
+- [x] Change the way i'm generating user ids and how I'm looking up users by username v. user id (now done with ULIDs)
 
 ## License
 
