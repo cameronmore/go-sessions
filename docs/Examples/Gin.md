@@ -1,3 +1,5 @@
+**NOTE that the Gin middlware is not working currently with an update to the main auth library**
+
 ```go
 package main
 
@@ -38,10 +40,14 @@ func main() {
 		panic(errors.New("Auth key not found"))
 	}
 
-	authCtx, err := auth.NewAuthContext(secret, db)
+	// Define a new SQLite store that implements the interface
+	sqliteAuthStore, err := auth.NewSQLiteStore(db, secret, 7 * 24 * time.Hour)
 	if err != nil {
-		log.Fatalf("Error creating AuthContext: %v", err)
+		panic(err)
 	}
+	// pass that store to the Authcontext that expects the interface
+	var authCtx auth.AuthContext
+	authCtx.Ac = sqliteAuthStore
 
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/cameronmore/go-sessions/auth"
 	"github.com/cameronmore/go-sessions/env"
@@ -39,11 +40,14 @@ func main() {
 		panic(errors.New("Auth key not found"))
 	}
 
-	// Generate a new authentication context manager with your secret and db connection
-	authCtx, err := auth.NewAuthContext(secret, db)
+	// Define a new SQLite store that implements the interface
+	sqliteAuthStore, err := auth.NewSQLiteStore(db, secret, 7 * 24 * time.Hour)
 	if err != nil {
 		panic(err)
 	}
+	// pass that store to the Authcontext that expects the interface
+	var authCtx auth.AuthContext
+	authCtx.Ac = sqliteAuthStore
 
 	// Now define your router. In this example, I'm using Chi
 	r := chi.NewRouter()

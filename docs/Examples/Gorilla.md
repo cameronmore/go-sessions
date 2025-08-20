@@ -39,10 +39,14 @@ func main() {
 		panic(errors.New("Auth key not found"))
 	}
 
-	authCtx, err := auth.NewAuthContext(secret, db)
+	// Define a new SQLite store that implements the interface
+	sqliteAuthStore, err := auth.NewSQLiteStore(db, secret, 7 * 24 * time.Hour)
 	if err != nil {
 		panic(err)
 	}
+	// pass that store to the Authcontext that expects the interface
+	var authCtx auth.AuthContext
+	authCtx.Ac = sqliteAuthStore
 
 	r := mux.NewRouter()
 

@@ -18,7 +18,14 @@ import "github.com/cameronmore/go-sessions/auth"
 ```
 Then:
 ```go
-authCtx, err := auth.NewAuthContext(YOUR_SECRET, db)
+// Define a new SQLite store that implements the interface
+sqliteAuthStore, err := auth.NewSQLiteStore(db, secret, 7 * 24 * time.Hour)
+if err != nil {
+	panic(err)
+}
+// pass that store to the Authcontext that expects the interface
+var authCtx auth.AuthContext
+authCtx.Ac = sqliteAuthStore
 ```
 
 Then, use those to handle the authentication endpoints:
@@ -44,17 +51,17 @@ protectedHandler := authCtx.Authmiddleware(http.HandleFunc(protectedHello))
 
 See the `docs/` directory in this repository for the full documentation. The `docs/Examples/` directory contains several examples using Gin, Chi, Gorilla/Mux, Echo, and the standard library. The most commented and guided one is the Chi router example.
 
-> 🚧 Note that the Gin and Echo examples imports a separate middleware library that extends this one.
+> 🚧 Note that the Gin and Echo examples imports a separate middleware library that extends this one. They are also not working at the moment.
 
 ## Todo
 
 There are a few key things that I need to implement before a v1.0.0 release, specifically:
-- Abstract the session and user store operations to allow for more implementions (with other SQL libraries instead of SQLite as the default)
-- Allowing username configuration and validation to return errors when a username does not match conventions (like having only alphanumeric characters)
-- Looking up usernames to ensure uniqueness and return that error to the client
-- Password validation to make sure users have strong passwords
-- Adjust how I'm comparing stored passwords and incoming passwords (to prevent timing attacks for example)
-- Allow users to modify the default session length
+- [x] Abstract the session and user store operations to allow for more implementions (with other SQL libraries instead of SQLite as the default)
+- [ ]  Allowing username configuration and validation to return errors when a username does not match conventions (like having only alphanumeric characters)
+- [x] Looking up usernames to ensure uniqueness and return that error to the client
+- [ ] Password validation to make sure users have strong passwords
+- [ ] Adjust how I'm comparing stored passwords and incoming passwords (to prevent timing attacks for example)
+- [x] Allow users to modify the default session length
 
 ## License
 

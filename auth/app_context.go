@@ -2,8 +2,8 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,42 +15,16 @@ import (
 
 // An authentication manager that handles creating, accessing, and deleting sessions.
 type AuthContext struct {
-	Secret string
-	DB     *sql.DB
+	Ac sessions.AuthStore
+	//Secret string
+	//Duration time.Duration
 }
 
 // Returns a new Authcontext authentication manager given a secret string used for cookie signing and a db connection.
-func NewAuthContext(secret string, db *sql.DB) (*AuthContext, error) {
-
-	// set up session table
-	newSessionTableQuery := `
-	CREATE TABLE IF NOT EXISTS sessions (
-	id TEXT PRIMARY KEY,
-	user_id TEXT NOT NULL,
-	expires_at TIMESTAMP NOT NULL
-	);
-	`
-	_, err := db.Exec(newSessionTableQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	// set up session table
-	newUserTableQuery := `
-	CREATE TABLE IF NOT EXISTS users (
-	user_id TEXT PRIMARY KEY,
-	hashed_password TEXT NOT NULL
-	);
-	`
-	_, err = db.Exec(newUserTableQuery)
-	if err != nil {
-		return nil, err
-	}
-
+func NewAuthContext(authStore sessions.AuthStore) *AuthContext {
 	return &AuthContext{
-		Secret: secret,
-		DB:     db,
-	}, nil
+		Ac: authStore,
+	}
 }
 
 // Handles the registration of new users and returns errors to the client if a username is already taken or the username does not meet some basic criteria.
@@ -81,12 +55,11 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	//username, password := formData["username"], formData["password"]
 
 	// add user to DB
-
-	newUserQuery := `
-		INSERT INTO users (user_id, hashed_password)
-		VALUES (?, ?)
-		`
-	_, err = ac.DB.Exec(newUserQuery, formData["username"].(string), hashedPassword)
+	var newUser sessions.User
+	newUser.UserId = formData["username"].(string)
+	newUser.Username = formData["username"].(string)
+	newUser.HashedPassword = hashedPassword
+	err = ac.Ac.SaveUser(newUser)
 	if err != nil {
 		// log it out
 		log.Printf("Error inserting user into DB: %s", err.Error())
@@ -97,13 +70,12 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionId, cookie := sessions.RegisterHandler(ac.Secret)
-
-	newSessionQuery := `
-		INSERT INTO sessions (id, user_id, expires_at)
-		VALUES (?, ?, ?)
-		`
-	_, err = ac.DB.Exec(newSessionQuery, sessionId, formData["username"].(string), cookie.Expires)
+	sessionId, cookie := sessions.RegisterHandler(ac.Ac.YieldKey(), ac.Ac.YieldDuration())
+	var nSession sessions.Session
+	nSession.Id = sessions.SessionId(sessionId)
+	nSession.ExpiresAt = cookie.Expires
+	nSession.UserId = formData["username"].(string)
+	err = ac.Ac.SaveSession(nSession)
 	if err != nil {
 		// log it out
 		log.Printf("Error inserting session into DB: %s", err.Error())
@@ -138,8 +110,7 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	username, password := formData["username"].(string), formData["password"].(string)
 
-	var storedHashedPassword string
-	err = ac.DB.QueryRowContext(r.Context(), "SELECT hashed_password FROM users WHERE user_id = ?", username).Scan(&storedHashedPassword)
+	u, err := ac.Ac.LoadUserByUserId(username, r.Context())
 	if err != nil {
 		// there are a number of error scenarios to handle here, bjust just declare a server error for now
 		log.Printf("Error logging in user %s: %s", username, err)
@@ -147,20 +118,22 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// storedPassword != hashedPassword
-	if !passwordIsEquivilent(password, storedHashedPassword) {
+	err = bcrypt.CompareHashAndPassword([]byte(u.HashedPassword), []byte(password))
+
+	if err != nil {
+		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Password incorrect"))
 		return
 	}
 
-	sessionId, cookie := sessions.LoginHandler(ac.Secret)
+	sessionId, cookie := sessions.LoginHandler(ac.Ac.YieldKey(), ac.Ac.YieldDuration())
 
-	newSessionQuery := `
-		INSERT INTO sessions (id, user_id, expires_at)
-		VALUES (?, ?, ?)
-		`
-	_, err = ac.DB.Exec(newSessionQuery, sessionId, formData["username"].(string), cookie.Expires)
+	var nSession sessions.Session
+	nSession.Id = sessions.SessionId(sessionId)
+	nSession.ExpiresAt = cookie.Expires
+	nSession.UserId = u.UserId
+	err = ac.Ac.SaveSession(nSession)
 	if err != nil {
 		// log it out
 		log.Printf("Error inserting session into DB: %s", err.Error())
@@ -185,31 +158,15 @@ func (ac *AuthContext) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Secret)
+	sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Ac.YieldKey())
 
 	if !isValid {
 		http.Error(w, "Invalid session cookie", http.StatusUnauthorized)
 	}
 
-	deleteCookieQuery := `
-	DELETE FROM sessions
-	WHERE id = ?
-	`
-
-	result, err := ac.DB.Exec(deleteCookieQuery, sessionId)
+	err = ac.Ac.DeleteSessionById(sessionId)
 	if err != nil {
-		log.Printf("Error removing session from db: %s", err)
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		log.Printf("Error getting rows affected from removing session: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if affected == 0 {
-		log.Printf("Error deleting session, no session found")
+		log.Printf("Error deleting session")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -229,37 +186,30 @@ func (ac *AuthContext) Authmiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Secret)
-
+		sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Ac.YieldKey())
+		//fmt.Println(sessionId)
 		if !isValid {
 			http.Error(w, "Invalid session cookie", http.StatusUnauthorized)
 		}
 
 		// here we would look up the cookie in the db to get the user info
 
-		var storedUserID string
-		var expiresAt time.Time
-		query := `SELECT user_id, expires_at FROM sessions WHERE id = ?`
-		err = ac.DB.QueryRowContext(r.Context(), query, sessionId).Scan(&storedUserID, &expiresAt)
+		nSession, err := ac.Ac.LoadSessionById(sessionId, r.Context())
 		if err != nil {
-			if err == sql.ErrNoRows {
-				log.Printf("Unauthorized: Session ID %s not found in DB.", sessionId)
-				http.Error(w, "Unauthorized: Session not found", http.StatusUnauthorized)
-				http.SetCookie(w, sessions.LogoutHandler()) // Clear client-side cookie if not found in DB
-				return
-			}
-			log.Printf("Database error looking up session %s: %v", sessionId, err)
-			http.Error(w, "Internal server error during authentication", http.StatusInternalServerError)
+			log.Printf("Error loading session: %s", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
 			return
+			// error retrieving session
 		}
 
 		// Check if session has expired
-		if time.Now().After(expiresAt) {
+		if time.Now().After(nSession.ExpiresAt) {
+			//if nSession.ExpiresAt.After(time.Now()) {
 			log.Printf("Unauthorized: Session ID %s expired.", sessionId)
 			http.Error(w, "Unauthorized: Session expired", http.StatusUnauthorized)
 			// Delete expired session from DB asynchronously or in a cleanup routine
 			go func() {
-				_, delErr := ac.DB.Exec("DELETE FROM sessions WHERE id = ?", sessionId)
+				delErr := ac.Ac.DeleteSessionById(sessionId)
 				if delErr != nil {
 					log.Printf("Error deleting expired session %s: %v", sessionId, delErr)
 				}
@@ -268,7 +218,8 @@ func (ac *AuthContext) Authmiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		userId := storedUserID
+		userId := nSession.UserId
+		//fmt.Println(nSession)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, "userId", userId)

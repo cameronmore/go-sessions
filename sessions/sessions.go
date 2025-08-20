@@ -24,12 +24,12 @@ func signSessionId(sessionId string, secret string) string {
 	return fmt.Sprintf("%s.%s", sessionId, base64.URLEncoding.EncodeToString(signature))
 }
 
-func newCookie(signedSessionId string) *http.Cookie {
+func newCookie(signedSessionId string, d time.Duration) *http.Cookie {
 	return &http.Cookie{
 		Name:     "session_id",
 		Value:    signedSessionId,
 		Path:     "/",
-		Expires:  time.Now().Add(24 * time.Hour),
+		Expires:  time.Now().Add(d),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
@@ -37,10 +37,10 @@ func newCookie(signedSessionId string) *http.Cookie {
 }
 
 // Returns a new cookie and session id
-func NewCookieWithSessionId(secret string) (cookie *http.Cookie, sessionId string) {
+func NewCookieWithSessionId(secret string, d time.Duration) (cookie *http.Cookie, sessionId string) {
 	sessionId = newSessionId()
 	signedSessionId := signSessionId(sessionId, secret)
-	cookie = newCookie(signedSessionId)
+	cookie = newCookie(signedSessionId, d)
 	return
 }
 
