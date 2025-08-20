@@ -41,13 +41,12 @@ func main() {
 	}
 
 	// Define a new SQLite store that implements the interface
-	sqliteAuthStore, err := auth.NewSQLiteStore(db, secret, 7 * 24 * time.Hour)
+	sqliteAuthStore, err := auth.NewSQLiteStore(db)
 	if err != nil {
 		panic(err)
 	}
 	// pass that store to the Authcontext that expects the interface
-	var authCtx auth.AuthContext
-	authCtx.Ac = sqliteAuthStore
+	authCtx := auth.NewAuthContext(sqliteAuthStore, secret, 7*24*time.Hour)
 
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)

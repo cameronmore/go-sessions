@@ -10,13 +10,11 @@ import (
 )
 
 type SQLiteAuthStore struct {
-	DB     *sql.DB
-	Secret string
-	Duration time.Duration
+	DB *sql.DB
 }
 
 // Returns a new SQLite AuthStore and creates the necessary user and sessions tables if they don't exist
-func NewSQLiteStore(db *sql.DB, secret string, d time.Duration) (*SQLiteAuthStore, error) {
+func NewSQLiteStore(db *sql.DB) (*SQLiteAuthStore, error) {
 
 	// set up session table
 	newSessionTableQuery := `
@@ -44,9 +42,7 @@ func NewSQLiteStore(db *sql.DB, secret string, d time.Duration) (*SQLiteAuthStor
 	}
 
 	return &SQLiteAuthStore{
-		DB:     db,
-		Secret: secret,
-		Duration: d,
+		DB: db,
 	}, nil
 }
 
@@ -71,7 +67,9 @@ func (s *SQLiteAuthStore) LoadUserByUserId(id string, ctx context.Context) (sess
 	u.UserId = id
 	var storedHashedPassword string
 	err := s.DB.QueryRowContext(ctx, "SELECT hashed_password FROM users WHERE user_id = ?", id).Scan(&storedHashedPassword)
-	if err != nil {
+	if errors.Is(sql.ErrNoRows, err) {
+		return u, sessions.ErrUserNotFound
+	} else if err != nil {
 		return u, err
 	}
 	u.HashedPassword = storedHashedPassword
@@ -122,12 +120,4 @@ func (s *SQLiteAuthStore) LoadSessionById(id string, ctx context.Context) (sessi
 	session.ExpiresAt = expiresAt
 	session.UserId = storedUserID
 	return session, err
-}
-
-func (s *SQLiteAuthStore) YieldKey() string {
-	return s.Secret
-}
-
-func (s *SQLiteAuthStore) YieldDuration() time.Duration {
-	return s.Duration
 }

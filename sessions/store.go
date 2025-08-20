@@ -28,13 +28,8 @@ type AuthStore interface {
 	LoadUserByUserId(string, context.Context) (User, error)
 	// DeleteUserByUserId(string) error
 	// UpdateUser(User) error
-	
+
 	SaveSession(Session) error
 	LoadSessionById(string, context.Context) (Session, error)
 	DeleteSessionById(string) error
-	// TODO, these two last methods should probably be moved to the auth context,
-	// not the auth store...
-
-	YieldKey() string
-	YieldDuration() time.Duration
 }

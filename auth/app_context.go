@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,15 +16,17 @@ import (
 
 // An authentication manager that handles creating, accessing, and deleting sessions.
 type AuthContext struct {
-	Ac sessions.AuthStore
-	//Secret string
-	//Duration time.Duration
+	Ac       sessions.AuthStore
+	Secret   string
+	Duration time.Duration
 }
 
 // Returns a new Authcontext authentication manager given a secret string used for cookie signing and a db connection.
-func NewAuthContext(authStore sessions.AuthStore) *AuthContext {
+func NewAuthContext(authStore sessions.AuthStore, secret string, d time.Duration) *AuthContext {
 	return &AuthContext{
-		Ac: authStore,
+		Ac:       authStore,
+		Secret:   secret,
+		Duration: d,
 	}
 }
 
@@ -56,6 +59,8 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// add user to DB
 	var newUser sessions.User
+	// TODO make this use a ULID or UUIDv4 for new user ids and then
+	// change other methods to allow lookups by username
 	newUser.UserId = formData["username"].(string)
 	newUser.Username = formData["username"].(string)
 	newUser.HashedPassword = hashedPassword
@@ -70,7 +75,7 @@ func (ac *AuthContext) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionId, cookie := sessions.RegisterHandler(ac.Ac.YieldKey(), ac.Ac.YieldDuration())
+	sessionId, cookie := sessions.RegisterHandler(ac.Secret, ac.Duration)
 	var nSession sessions.Session
 	nSession.Id = sessions.SessionId(sessionId)
 	nSession.ExpiresAt = cookie.Expires
@@ -111,6 +116,11 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	username, password := formData["username"].(string), formData["password"].(string)
 
 	u, err := ac.Ac.LoadUserByUserId(username, r.Context())
+	if errors.Is(err, sessions.ErrUserNotFound) {
+		log.Printf("Error logging in user %s: %s", username, err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	if err != nil {
 		// there are a number of error scenarios to handle here, bjust just declare a server error for now
 		log.Printf("Error logging in user %s: %s", username, err)
@@ -127,7 +137,7 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionId, cookie := sessions.LoginHandler(ac.Ac.YieldKey(), ac.Ac.YieldDuration())
+	sessionId, cookie := sessions.LoginHandler(ac.Secret, ac.Duration)
 
 	var nSession sessions.Session
 	nSession.Id = sessions.SessionId(sessionId)
@@ -158,7 +168,7 @@ func (ac *AuthContext) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Ac.YieldKey())
+	sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Secret)
 
 	if !isValid {
 		http.Error(w, "Invalid session cookie", http.StatusUnauthorized)
@@ -186,7 +196,7 @@ func (ac *AuthContext) Authmiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Ac.YieldKey())
+		sessionId, isValid := sessions.VerifyRequestSessionCookie(r, ac.Secret)
 		//fmt.Println(sessionId)
 		if !isValid {
 			http.Error(w, "Invalid session cookie", http.StatusUnauthorized)
