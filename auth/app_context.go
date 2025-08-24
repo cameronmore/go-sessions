@@ -141,8 +141,10 @@ func (ac *AuthContext) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		fmt.Println(err)
+		// yodo consider if this should be BadRequest or something generic so as to not
+		// let an intruder know if the username already exists
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Password incorrect"))
+		w.Write([]byte("Log-in failure"))
 		return
 	}
 
